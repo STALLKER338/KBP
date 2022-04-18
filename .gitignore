@@ -1,0 +1,702 @@
+using System;
+using System.Net.Sockets;
+using System.Text;
+using System.Net;
+using System.Threading;
+using System.Data.SqlClient;
+using System.Data;
+using System.Configuration;
+using System.Net.Mail;
+
+namespace ConsoleServer
+{
+    class Program 
+    {
+        const int port = 8888;
+        static TcpListener listener;
+        static bool start = true;
+        static string log,name, connectionString = "Server=localhost;Database=Unilife_test;Trusted_Connection=True;";
+        static void Main(string[] args)
+        {
+            try
+            {
+                Thread commandThread = new Thread(new ThreadStart(CMD));
+                commandThread.Start();
+                Podkl();     
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine(ex.Message+"\n");
+            }
+            finally
+            {
+                if (listener != null)
+                    listener.Stop();
+            }
+        }
+        static void Podkl()
+        {
+            try
+            {
+                Console.WriteLine("\bОжидание подключений...");
+                listener = new TcpListener(IPAddress.Parse("127.0.0.1"), port);
+                listener.Start();
+                while (true)
+                {
+                    TcpClient client = listener.AcceptTcpClient();
+                    ClientObject clientObject = new ClientObject(client);
+
+                    // создаем новый поток для обслуживания нового клиента
+                    Thread clientThread = new Thread(new ThreadStart(clientObject.Process));
+                    clientThread.Start();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("\b" + ex.Message);
+                log = ex.Message;
+                Log();
+            }
+            finally
+            {
+                if (listener != null)
+                    listener.Stop();
+            }
+        }
+        static void Log()
+        {
+            SqlConnection connect = new SqlConnection(connectionString);//создание переменной для подключения к БД
+            SqlCommand cmd;//Создание переменной для sql комманды
+            connect.Open();//открытие подключения к БД
+            cmd = new SqlCommand($"INSERT INTO Logs (log, date, [user]) VALUES(\'{log}\', \'{DateTime.Now}\', \'{name}\')", connect);//Команда для записи лога в БД
+            cmd.ExecuteNonQuery();//Выполнение команды
+        }
+        static void AddUser(SqlCommand cmd, SqlConnection connect)
+        {
+metka1:
+
+                Console.WriteLine("Введите логин пароль mail");
+                string buf = Convert.ToString(Console.ReadLine());
+            string[] adduser = buf.Split(' ');
+            if (adduser.Length == 3)
+            {
+                cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{adduser[0]}\') then 1 else 0 end", connect);
+                var output = cmd.ExecuteScalar();
+                string t = output.ToString();
+                if (t == "1")
+                {
+                    Console.WriteLine("Пользователь с таким именем уже существует");
+                }
+                else
+                {
+                    cmd = new SqlCommand($"INSERT INTO Users (login, password, mail) VALUES(\'{adduser[0]}\', \'{adduser[1]}\', \'{adduser[2]}\')", connect);
+                    cmd.ExecuteNonQuery();
+                    log = "Пользователь успешно создан " + adduser[0];
+                    Log();
+                    Console.WriteLine(log);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Гений, ты не верно заполнил)");
+                goto metka1;
+            }
+        }
+        static void DelUser(SqlCommand cmd, SqlConnection connect)
+        {
+metka1:
+            Console.WriteLine("Введите логин");
+            string buf = Convert.ToString(Console.ReadLine());
+            string[] deluser = buf.Split(' ');
+            if (deluser.Length == 1)
+            {
+                cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{deluser[0]}\') then 1 else 0 end", connect);
+                var output = cmd.ExecuteScalar();
+                string t = output.ToString();
+                if (t == "0")
+                {
+                    Console.WriteLine("Пользователь с таким именем не существует");
+                }
+                else
+                {
+                    cmd = new SqlCommand($"DELETE FROM Users where login=\'{deluser[0]}\'", connect);
+                    cmd.ExecuteNonQuery();
+                    log = "Пользователь успешно удалён " + deluser[0];
+                    Log();
+                    Console.WriteLine(log);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Гений, ты не верно заполнил)");
+                goto metka1;
+            }
+        }
+        static void AddGroup(SqlCommand cmd, SqlConnection connect)
+        {
+metka1:
+            Console.WriteLine("Введите название уровень прав");
+            string buf = Convert.ToString(Console.ReadLine());
+            string[] addgroup = buf.Split(' ');
+            if (addgroup.Length == 2)
+            {
+                cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{addgroup[0]}\') then 1 else 0 end", connect);
+                var output = cmd.ExecuteScalar();
+                string t = output.ToString();
+                if (t == "1")
+                {
+                    Console.WriteLine("Группа с таким именем уже существует");
+                }
+                else
+                {
+                    cmd = new SqlCommand($"INSERT INTO Groups (name, level_permission) VALUES(\'{addgroup[0]}\',\'{addgroup[1]}\')", connect);//команда sql для добавления строки в БД
+                    cmd.ExecuteNonQuery();//выполнение команды и получение ответа
+                    log = "Группа успешно создана " + addgroup[0];// переменная в которой хрнится сообщение лога
+                    Log();//Вызов функции которая записывает лог в БД
+                    Console.WriteLine(log);//Вывод лога на консоль
+                }
+            }
+            else
+            {
+                Console.WriteLine("Гений, ты не верно заполнил)");
+                goto metka1;
+            }
+        }
+        static void DelGroup(SqlCommand cmd, SqlConnection connect)
+        {
+metka1:
+            Console.WriteLine("Введите название ");
+            string buf = Convert.ToString(Console.ReadLine());
+            string[] delgroup = buf.Split(' ');
+            if (delgroup.Length == 1)
+            {
+                cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{delgroup[0]}\') then 1 else 0 end", connect);
+                var output = cmd.ExecuteScalar();
+                string t = output.ToString();
+                if (t == "1")
+                {
+                    Console.WriteLine("Пользователь с таким именем уже существует");
+                }
+                else
+                {
+                    cmd = new SqlCommand($"DELETE FROM Groups where(\'{delgroup[0]}\')", connect);
+                    cmd.ExecuteNonQuery();
+                    log = "Группа успешно создана " + delgroup[0];
+                    Log();
+                    Console.WriteLine(log);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Гений, ты не верно заполнил)");
+                goto metka1;
+            }
+        }
+        static void CMD()
+        {       
+            SqlConnection connect = new SqlConnection(connectionString);         
+            connect.Open();
+            SqlCommand cmd = new SqlCommand("1", connect);
+            while (true)
+            {
+                name = "server";
+                string command = Convert.ToString(Console.ReadLine());
+                string[] commands = command.Split();
+                if (commands[0] == "/stop"|| commands[0] == "/отключить" || commands[0] == "/exit" || commands[0] == "/выйти"|| commands[0] == "/Stop" || commands[0] == "/Отключить" || commands[0] == "/Exit" || commands[0] == "/Выйти")
+                {
+                    log = "Сервер остановлен\n";
+                    Log();
+                    Console.WriteLine(log);
+                    listener.Stop();
+                    Environment.Exit(0);
+                }
+                else if (commands[0] == "/pause" & start == true || commands[0] == "/остановить" & start == true || commands[0] == "/Pause" & start == true || commands[0] == "/Остановить" & start == true)
+                {
+                    log = "Сервер отключён для новых запросов\n";
+                    Log();
+                    Console.WriteLine(log);
+                    start = false;
+                    listener.Stop();
+                }
+                else if (commands[0] == "/pause" & start == false || commands[0] == "/остановить" & start == false|| commands[0] == "/Pause" & start == false || commands[0] == "/Остановить" & start == false)
+                {
+                    Console.WriteLine("Работа и так остановлена...\n");
+                }
+                else if (commands[0] == "/start" & start == true|| commands[0] == "/run" & start == true|| commands[0] == "/запустить" & start == true || commands[0] == "/Запустить" & start == true || commands[0] == "/Run" & start == true || commands[0] == "/Start" & start == true || commands[0] == "/старт" & start == true || commands[0] == "/Старт" & start == true)
+                {
+                    Console.WriteLine("Сервер и так работает...\n");
+                }
+                else if (commands[0] == "/start" & start==false || commands[0] == "/run" & start == false || commands[0] == "/запустить" & start == false || commands[0] == "/Запустить" & start == false || commands[0] == "/Run" & start == false || commands[0] == "/Start" & start == false || commands[0] == "/старт" & start == false || commands[0] == "/Старт" & start == false)
+                {
+                    log = "Сервер вновь принемает запросы\n";
+                    Log();
+                    Console.WriteLine(log);
+                    start = true;
+                    Thread commandThread = new Thread(new ThreadStart(Podkl));
+                    commandThread.Start();
+                }           
+                else if (commands[0] == "/adduser"|| commands[0] == "/Adduser")
+                {
+                    AddUser( cmd, connect);
+                }
+                else if (commands[0] == "/deluser"|| commands[0] == "/Deluser")
+                {
+                    DelUser(cmd, connect);
+                }
+                else if (commands[0] == "/addgroup"|| commands[0] == "/Addgroup")
+                {
+                    AddGroup(cmd, connect);
+                }
+                else if (commands[0] == "/delgroup"|| commands[0] == "/Delgroup")
+                {
+                    DelGroup(cmd, connect);
+                }
+                else if(commands[0] == "/clear" || commands[0] == "/clean" || commands[0] == "/Clear" || commands[0] == "/Clean")
+                {
+                    Console.Clear();
+                    log = "Консоль отчищена\n";
+                    Log();
+                    Console.WriteLine(log);
+                }
+                else if (commands[0] == "/STALLKER337")
+                {
+                    Console.WriteLine("Пасхалочка на создателя программы\n");
+                }
+                else if (commands[0] == "/help" || commands[0] == "/помощь" || commands[0] == "/Help" || commands[0] == "/Помощь")
+                {
+                    log = "Справка по командам";
+                    Log();
+                    Console.WriteLine(log);
+                    Console.WriteLine(" 1./pause - Останавливает передачи данных от клиента  серверу(дозаписывает полученные данные);\n" +
+                        " 2./start - Востанавливает передачу данных;\n" +
+                        " 3./stop - Jтключает сервер(все не записаные данные удаляются);\n" +
+                        " 4./adduser - Добавление пользователя;\n" +
+                        " 5./deluser - Удалить пользователя;\n" +
+                        " 6./addgroup - Добавить пользователя;\n" +
+                        " 7.delgroup - Удалить пользователя;\n" +
+                        " 8./clear - Отчистить консоль.\n");
+                }
+                else
+                {
+                    Console.WriteLine("Такой команды не существует...\n");
+                }
+            }
+        }
+    }
+    public class ClientObject
+    {
+        NetworkStream stream = null;
+        public TcpClient client;
+        public ClientObject(TcpClient tcpClient)
+        {
+            client = tcpClient;
+        }
+
+        public void Process()
+        {
+            string message;
+            NetworkStream stream = null;
+            try
+            {
+                string connectionString = "Server=localhost;Database=Unilife_test;Trusted_Connection=True;";
+                SqlCommand cmd;
+                SqlConnection connect = new SqlConnection(connectionString);
+                connect.Open();
+                stream = client.GetStream();
+                byte[] data = new byte[64]; // буфер для получаемых данных
+                while (true)
+                {
+                    // получаем сообщение
+                    StringBuilder builder = new StringBuilder();
+                    int bytes = 0;
+                    do
+                    {
+                        bytes = stream.Read(data, 0, data.Length);
+                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                    }
+                    while (stream.DataAvailable);
+                    message = builder.ToString();
+                    string[] mas = message.Split(' ');
+                    if (mas[0] == "1")
+                    {
+                        cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{mas[1]}\' and password=\'{mas[2]}\' and active=\'true\') then 1 else 0 end", connect);
+                        var output = cmd.ExecuteScalar();
+                        string t = output.ToString();
+
+                        if (t == "1")
+                        {
+                            string key = "";
+                            var rand = new Random();
+                            int y;
+
+                            for (int i = 0; i < 50; i++)
+                            {
+                                y = rand.Next(1, 3);
+                                if (y == 1)
+                                {
+                                    key += Convert.ToChar(rand.Next(97, 124));
+                                }
+                                else
+                                {
+                                    key += rand.Next(1, 10);
+                                }
+                            }
+
+
+                            cmd = new SqlCommand("UPDATE Users SET [key]=@key WHERE login=@login and password=@password", connect);
+
+                            cmd.Parameters.AddWithValue("@key", key);
+                            cmd.Parameters.AddWithValue("@login", mas[1]);
+                            cmd.Parameters.AddWithValue("@password", mas[2]);
+
+                            //add whatever parameters you required to update here
+                            int rows = cmd.ExecuteNonQuery();
+                            cmd = new SqlCommand($"select mail from Users where login=\'{mas[1]}\' and password=\'{mas[2]}\'", connect);
+
+                            var mails = cmd.ExecuteScalar();
+
+
+
+                            // отправитель - устанавливаем адрес и отображаемое в письме имя
+                            MailAddress from = new MailAddress("unilife2021@tut.by", "Unilife");
+                            // кому отправляем
+
+                            MailAddress to = new MailAddress(mails.ToString());//это адрес на который отправляем
+                                                                               // создаем объект сообщения
+                            MailMessage m = new MailMessage(from, to);
+                            // тема письма
+                            m.Subject = "Код подтверждения";
+                            // текст письма
+                            m.Body = "Код подтверждения для входа в Unilife_tester " + key;
+                            // письмо представляет код html
+                            m.IsBodyHtml = true;
+                            // адрес smtp-сервера и порт, с которого будем отправлять письмо
+                            SmtpClient smtp = new SmtpClient("smtp.yandex.ru", 587);
+                            // логин и пароль
+                            smtp.Credentials = new NetworkCredential("unilife2021@tut.by", "mWjJqv6NaxJhjn6");
+                            smtp.EnableSsl = true;
+                            smtp.Send(m);
+                            connect.Close();
+
+                            Console.WriteLine($"Вход по данным {mas[1]} {mas[2]}");
+                            data = Encoding.Unicode.GetBytes("1");
+                            stream.Write(data, 0, data.Length);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Неудачная попытка входа по данным {mas[1]} {mas[2]} ");
+                            data = Encoding.Unicode.GetBytes("0");
+                        }
+                    }
+                    else if (mas[0] == "2")
+                    {
+                        cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{mas[1]}\' and password=\'{mas[2]}\'and [key]=\'{mas[3]}\') then 1 else 0 end", connect);
+                        var output = cmd.ExecuteScalar();
+                        string t = output.ToString();
+                        if (t == "1")
+                        {
+                            Console.WriteLine($"Подтверждение ключа по данным {mas[1]} {mas[2]} {mas[3]}");
+                            data = Encoding.Unicode.GetBytes("1");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Ahtung, Ahtung ключ по данным {mas[1]} {mas[2]} {mas[3]} не подошёл");
+                            data = Encoding.Unicode.GetBytes("0");
+                        }
+                        stream.Write(data, 0, data.Length);
+                    }
+                    else if (mas[0] == "3")
+                    {
+                        cmd = new SqlCommand($"Select [group] from Users where login =\'{mas[1]}\' and password=\'{mas[2]}\'and [key]=\'{mas[3]}\'", connect);
+                        var output = cmd.ExecuteScalar();
+                        string t = output.ToString();
+                        mas[3] = t;
+                        data = Encoding.Unicode.GetBytes(t);
+                        stream.Write(data, 0, data.Length);
+
+                        cmd = new SqlCommand($"Select COUNT (id) from Subjects", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+
+                        data = Encoding.Unicode.GetBytes(t);
+                        stream.Write(data, 0, data.Length);
+
+                        cmd = new SqlCommand($"Select [level permission] from Groups where name=\'{mas[3]}\'", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+                        mas[2] = t;
+
+                        cmd = new SqlCommand($"Select [level permissions] from Permissions where name_function=\'Predmets\'", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+                        if (Convert.ToInt32(mas[2]) >= Convert.ToInt32(t))
+                        {
+                            cmd = new SqlCommand($"Select name from Subjects", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+                        else
+                        {
+                            cmd = new SqlCommand($"Select name from Subjects where [group]=\'{mas[3]}\'", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+
+                    }
+                    else if (mas[0] == "4")//Tests name
+                    {
+                        cmd = new SqlCommand($"Select [group] from Users where login =\'{mas[1]}\' and password=\'{mas[2]}\'and [key]=\'{mas[3]}\'", connect);
+                        var output = cmd.ExecuteScalar();
+                        string t = output.ToString();
+                        mas[3] = t;
+
+                        cmd = new SqlCommand($"Select COUNT (name) from Tests where subject=\'{mas[4]}\'", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+
+                        data = Encoding.Unicode.GetBytes(t);
+                        stream.Write(data, 0, data.Length);
+
+                        cmd = new SqlCommand($"Select [level permission] from Groups where name=\'{mas[3]}\'", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+                        mas[2] = t;
+
+                        cmd = new SqlCommand($"Select [level permissions] from Permissions where name_function=\'Tests\'", connect);
+                        output = cmd.ExecuteScalar();
+                        t = output.ToString();
+                        if (Convert.ToInt32(mas[2]) >= Convert.ToInt32(t))
+                        {
+                            cmd = new SqlCommand($"Select name from Tests", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+                        else
+                        {
+                            cmd = new SqlCommand($"Select name from Tests where [group]=\'{mas[3]}\'", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+
+
+                    }
+                    else if (mas[0] == "6")
+                    {
+                        cmd = new SqlCommand($"select case when exists(Select * from Users where login=\'{mas[1]}\' and password=\'{mas[2]}\' and active=\'true\') then 1 else 0 end", connect);
+                        var output = cmd.ExecuteScalar();
+                        string t = output.ToString();
+
+                        if (t == "1")
+                        {
+
+                            cmd = new SqlCommand($"Select COUNT (id) from Questions where name_texst=\'{mas[4]}\'", connect);
+                            output = cmd.ExecuteScalar();
+                            t = output.ToString();
+                            data = Encoding.Unicode.GetBytes(t);
+                            stream.Write(data, 0, data.Length);
+
+                            cmd = new SqlCommand($"Select question,answer1,answer2,answer3,answer4 from Questions where name_texst=\'{mas[4]}\'", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(1));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(2));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(3));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(4));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(5));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+                        else
+                        {
+                            cmd = new SqlCommand($"Select name from Tests where [group]=\'{mas[3]}\'", connect);
+                            SqlDataReader reader = cmd.ExecuteReader();
+                            if (reader.HasRows)
+                            {
+                                while (reader.Read())
+                                {
+                                    data = Encoding.Unicode.GetBytes(reader.GetString(0));
+                                    stream.Write(data, 0, data.Length);
+                                    do
+                                    {
+                                        bytes = stream.Read(data, 0, data.Length);
+                                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                                    }
+                                    while (stream.DataAvailable);
+                                    message = builder.ToString();
+                                    builder = new StringBuilder();
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No rows found.");
+                            }
+                            reader.Close();
+                        }
+                    }
+                }
+            }
+
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                if (stream != null)
+                    stream.Close();
+                if (client != null)
+                    client.Close();
+            }
+        }
+
+    }
+}
